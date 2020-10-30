@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS bankevents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+    event_type text, 
+    payload text
+);
