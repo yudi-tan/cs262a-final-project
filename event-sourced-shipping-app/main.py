@@ -4,7 +4,9 @@ from typing import List
 import ray
 
 class Actor(abc.ABC): ...
-class Event(abc.ABC): ...
+class Event(abc.ABC):
+    def __eq__(self, other):
+        return type(self) == type(other) and self.__dict__ == other.__dict__
 
 @ray.remote
 class Ship(Actor):
@@ -15,7 +17,7 @@ class Ship(Actor):
         self.log: List[Event] = list()
         if not replay:
             self.on(Creation(name, location))
-    
+
     def eventHandler(self, event: Event):
         if not isinstance(event, Event):
             return
@@ -54,19 +56,22 @@ class Ship(Actor):
             raise
             return
         self.on(Load(self.name, cargo))
-    
+
     def unload(self, cargo: str):
         if self.location == "SEA" or cargo not in self.cargo:
             raise
             return
         self.on(Unload(self.name, cargo))
-    
+
     def getLog(self):
         return self.log
 
+    def getState(self):
+        return self.name, self.location, self.cargo
+
     @staticmethod
     def replay(events: List[Event]):
-        ret = Ship.remote("", "")
+        ret = Ship.remote("", "", replay=True)
         for event in events:
             ret.on.remote(event)
         return ret
@@ -95,4 +100,3 @@ class Unload(Event):
     def __init__(self, ship: str, cargo: str):
         self.ship = ship
         self.cargo = cargo
-
