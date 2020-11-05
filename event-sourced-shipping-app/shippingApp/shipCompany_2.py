@@ -3,7 +3,7 @@ from typing import List
 
 import ray
 
-from util import Actor, Event, sortStreams
+from util import Actor, Event, handleEQ, sortStreams
 from ship import Ship
 
 
@@ -17,17 +17,24 @@ class ShipCompany(Actor): # global single-instance implementation
         if not isinstance(event, Event):
             return
         elif isinstance(event, ShipCompany.Establish):
-            self.ships[event.name] = list()        
+            self.ships[event.name] = list()
         elif isinstance(event, ShipCompany.Acquire):
             self.ships[event.company].append(event.ship)
         elif isinstance(event, ShipCompany.Unacquire):
-            self.ships[event.company].remove(event.ship)
+            for ship in self.ships[event.company].copy():
+                if handleEQ(ship, event.ship):
+                    self.ships[event.company].remove(ship)
+                    break
         elif isinstance(event, ShipCompany.Transfer):
-            self.ships[event.oldCompany].remove(event.Ship)
-            self.ships[event.newCompany].append(event.Ship)
+            # self.ships[event.oldCompany].remove(event.ship)
+            for ship in self.ships[event.oldCompany].copy():
+                if handleEQ(ship, event.ship):
+                    self.ships[event.oldCompany].remove(ship)
+                    break
+            self.ships[event.newCompany].append(event.ship)
         else:
             raise NotImplementedError
-    
+
     def on(self, event: Event):
         self.log.append(event)
         self.eventHandler(event)
@@ -42,7 +49,7 @@ class ShipCompany(Actor): # global single-instance implementation
             raise ShipCompany.InvalidActionException
         self.on(ShipCompany.Acquire(ship, company))
         ship.on.remote(Ship.TransferOwnership(company))
-    
+
     def unacquire(self, ship: Ship, company: str):
         if ray.get(ship.getOwner.remote()) != company:
             raise ShipCompany.InvalidActionException
@@ -52,8 +59,12 @@ class ShipCompany(Actor): # global single-instance implementation
     def transfer(self, ship: Ship, oldCompany: str, newCompany: str):
         if ray.get(ship.getOwner.remote()) != oldCompany:
             raise ShipCompany.InvalidActionException
-        print(self.ships[oldCompany], ship, ship in self.ships[oldCompany])
-        if ship not in self.ships[oldCompany]:
+        # print(self.ships[oldCompany], ship, ship in self.ships[oldCompany])
+        if not any([handleEQ(ship, shipIter) for shipIter in self.ships[oldCompany]]):
+            raise ShipCompany.InvalidActionException
+        # if ship not in self.ships[oldCompany]:
+        #     raise ShipCompany.InvalidActionException
+        if ship._actor_id not in [x._actor_id for x in self.ships[oldCompany]]:
             raise ShipCompany.InvalidActionException
         if newCompany not in self.ships.keys():
             self.on(ShipCompany.Establish(newCompany))
@@ -62,7 +73,7 @@ class ShipCompany(Actor): # global single-instance implementation
 
     def getState(self):
         return self.ships
-    
+
     def getGlobalLogStream(self) -> List[Event]:
         streams = [self.log]
         for lst in self.ships.values():
@@ -94,6 +105,7 @@ class ShipCompany(Actor): # global single-instance implementation
 
     class Transfer(Event):
         def __init__(self, ship, oldCompany, newCompany):
+            super().__init__()
             self.ship = ship
             self.oldCompany = oldCompany
             self.newCompany = newCompany
