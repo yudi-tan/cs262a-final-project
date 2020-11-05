@@ -5,14 +5,19 @@ import ray
 
 from util import Actor, Event
 
+# class ref_src:
+#     def __init__(self, parent_ref):
+#         self.parent_ref: ray.actor.ActorHandle = parent_ref
+#         self.parent_name = ray.get(parent_ref.get_name.remote())
+
 @ray.remote
 class Ship(Actor):
     def __init__(self, name: str, location: str, replay: bool = False):
         self.name: str
         self.location: str
         # self.owner: ShipCompany
-        self.owner = None
-        self.cargo: List[str] = list()
+        self.owner: str
+        self.cargo: List[str]
         self.log: List[Event] = list()
         if not replay:
             self.on(Ship.Creation(name, location))
@@ -23,7 +28,8 @@ class Ship(Actor):
         elif isinstance(event, Ship.Creation):
             self.name = event.ship
             self.location = event.port
-            self.owner = None
+            self.owner = ""
+            self.cargo = list()
         elif isinstance(event, Ship.TransferOwnership):
             self.owner = event.owner
         elif isinstance(event, Ship.Departure):
@@ -40,8 +46,6 @@ class Ship(Actor):
     def on(self, event: Event):
         self.log.append(event)
         self.eventHandler(event)
-        # if self.owner is not None:
-        #     self.owner.on.remote()
 
     def depart(self, origin: str):
         if self.location == "SEA" or self.location != origin:
@@ -96,7 +100,7 @@ class Ship(Actor):
     
     class TransferOwnership(Event):
         # def __init__(self, owner: ShipCompany):
-        def __init__(self, owner):
+        def __init__(self, owner: str):
             super().__init__()
             self.owner = owner
 

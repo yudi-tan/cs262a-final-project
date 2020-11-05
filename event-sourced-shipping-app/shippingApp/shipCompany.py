@@ -37,17 +37,17 @@ class ShipCompany(Actor): # not done yet
         self.eventHandler(event)
     
     def acquire(self, ship: Ship):
-        if ray.get(ship.getParent.remote()) is not None:
+        if ray.get(ship.getOwner.remote()) is not None:
             raise ShipCompany.InvalidActionException
         self.on(ShipCompany.Acquire(ship))
     
     def unacquire(self, ship: Ship):
-        if ray.get(ship.getParent.remote()) != self:
+        if ray.get(ship.getOwner.remote()) != self:
             raise ShipCompany.InvalidActionException
         self.on(ShipCompany.Unacquire(ship))
     
     def getGlobalLogStream(self) -> List[Event]:
-        return sortStreams([self.log] + [ship.getLog.remote() for ship in self.ships])
+        return sortStreams([self.log] + [ray.get(ship.getLog.remote()) for ship in self.ships])
 
 
     class InvalidActionException(Exception): ...
