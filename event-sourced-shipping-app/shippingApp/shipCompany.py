@@ -3,51 +3,83 @@ from typing import List
 
 import ray
 
-from util import Actor, Event, sortStreams
+from util import Actor, Event, handleEQ, sortStreams
 from ship import Ship
 
+
 @ray.remote
-class ShipCompany(Actor): # not done yet
-    def __init__(self, name: str, replay: bool = False):
-        self.name: str
-        self.location: str
-        
-        # self.ships: List[ray.actor.ActorHandle] = list()
-        self.ships: List[Ship] = list()
+class ShipCompany(Actor): # global single-instance implementation
+    def __init__(self, replay: bool = False):
+        self.ships: Dict[str, List[Ship]] = dict()
         self.log: List[Event] = list()
-        if not replay:
-            self.on(ShipCompany.Establish(name))
     
     def eventHandler(self, event: Event):
         if not isinstance(event, Event):
             return
         elif isinstance(event, ShipCompany.Establish):
-            self.name = event.name
+            self.ships[event.name] = list()
         elif isinstance(event, ShipCompany.Acquire):
-            self.ships.append(event.ship)
-            event.ship.on.remote(Ship.TransferOwnership(self))
+            self.ships[event.company].append(event.ship)
         elif isinstance(event, ShipCompany.Unacquire):
-            self.ships.remove(event.ship)
-            event.ship.on.remote(Ship.TransferOwnership(None))
+            for ship in self.ships[event.company].copy():
+                if handleEQ(ship, event.ship):
+                    self.ships[event.company].remove(ship)
+                    break
+        elif isinstance(event, ShipCompany.Transfer):
+            # self.ships[event.oldCompany].remove(event.ship)
+            for ship in self.ships[event.oldCompany].copy():
+                if handleEQ(ship, event.ship):
+                    self.ships[event.oldCompany].remove(ship)
+                    break
+            self.ships[event.newCompany].append(event.ship)
         else:
             raise NotImplementedError
-    
+
     def on(self, event: Event):
         self.log.append(event)
         self.eventHandler(event)
-    
-    def acquire(self, ship: Ship):
-        if ray.get(ship.getOwner.remote()) is not None:
+
+    def establish(self, name: str):
+        if name in self.ships.keys():
             raise ShipCompany.InvalidActionException
-        self.on(ShipCompany.Acquire(ship))
-    
-    def unacquire(self, ship: Ship):
-        if ray.get(ship.getOwner.remote()) != self:
+        self.on(ShipCompany.Establish(name))
+
+    def acquire(self, ship: Ship, company: str):
+        if ray.get(ship.getOwner.remote()) != "":
             raise ShipCompany.InvalidActionException
-        self.on(ShipCompany.Unacquire(ship))
-    
+        self.on(ShipCompany.Acquire(ship, company))
+        ship.on.remote(Ship.TransferOwnership(company))
+
+    def unacquire(self, ship: Ship, company: str):
+        if ray.get(ship.getOwner.remote()) != company:
+            raise ShipCompany.InvalidActionException
+        self.on(ShipCompany.Unacquire(ship, company))
+        ship.on.remote(Ship.TransferOwnership(""))
+
+    def transfer(self, ship: Ship, oldCompany: str, newCompany: str):
+        if ray.get(ship.getOwner.remote()) != oldCompany:
+            raise ShipCompany.InvalidActionException
+        # print(self.ships[oldCompany], ship, ship in self.ships[oldCompany])
+        if not any([handleEQ(ship, shipIter) for shipIter in self.ships[oldCompany]]):
+            raise ShipCompany.InvalidActionException
+        # if ship not in self.ships[oldCompany]:
+        #     raise ShipCompany.InvalidActionException
+        if ship._actor_id not in [x._actor_id for x in self.ships[oldCompany]]:
+            raise ShipCompany.InvalidActionException
+        if newCompany not in self.ships.keys():
+            self.on(ShipCompany.Establish(newCompany))
+        self.on(ShipCompany.Transfer(ship, oldCompany, newCompany))
+        ship.on.remote(Ship.TransferOwnership(newCompany))
+
+    def getState(self):
+        return self.ships
+
     def getGlobalLogStream(self) -> List[Event]:
-        return sortStreams([self.log] + [ray.get(ship.getLog.remote()) for ship in self.ships])
+        streams = [self.log]
+        for lst in self.ships.values():
+            for ship in lst:
+                streams.append(ray.get(ship.getLog.remote()))
+        return sortStreams(streams)
 
 
     class InvalidActionException(Exception): ...
@@ -60,11 +92,20 @@ class ShipCompany(Actor): # not done yet
 
     class Acquire(Event):
         # acquiring of a ship
-        def __init__(self, ship: Ship):
+        def __init__(self, ship: Ship, company: str):
             super().__init__()
             self.ship = ship
+            self.company = company
     
     class Unacquire(Event):
-        def __init__(self, ship: Ship):
+        def __init__(self, ship: Ship, company: str):
             super().__init__()
             self.ship = ship
+            self.company = company
+
+    class Transfer(Event):
+        def __init__(self, ship, oldCompany, newCompany):
+            super().__init__()
+            self.ship = ship
+            self.oldCompany = oldCompany
+            self.newCompany = newCompany
