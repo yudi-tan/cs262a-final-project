@@ -36,6 +36,36 @@ class BankingActor:
     def retrieve_balance(self, user):
         return self.ledger[user]
 
+    # Handles the Q in "CQRS". More complicated query (i.e. filtering).
+    # Input: start_time string, end_time string (in SQL timestamp format)
+    # Output: int - minimum deposit within a time window
+    def moving_min_deposit(self, start_time, end_time):
+        c = self.db.cursor()
+        c.execute('SELECT * FROM bankevents WHERE timestamp <= ? and timestamp >= ?', [end_time, start_time]) 
+        result = float('inf')
+        for row in c:
+            if row[1] == "DEPOSIT":
+                event_dict = json.loads(row[2])
+                amount = event_dict["amount"]
+                result = min(result, amount)
+        if result == float('inf'):
+            return 0
+        return result
+    
+    # Handles the Q in "CQRS". More complicated query (i.e. filtering).
+    # Input: start_time string, end_time string (in SQL timestamp format)
+    # Output: int - total deposit within a time window
+    def moving_sum_deposit(self, start_time, end_time):
+        c = self.db.cursor()
+        c.execute('SELECT * FROM bankevents WHERE timestamp <= ? and timestamp >= ?', [end_time, start_time]) 
+        total = 0
+        for row in c:
+            if row[1] == "DEPOSIT":
+                event_dict = json.loads(row[2])
+                amount = event_dict["amount"]
+                total += amount
+        return total
+
     # Reads and replays every event to build up the internal self.ledger state.
     # Called during actor initialization
     def __replay_events(self):

@@ -16,4 +16,8 @@ if __name__ == "__main__":
         print("Deposit command failed.")
     else:
         ref = a.retrieve_balance.remote("alice")
-        print(ray.get(ref))
+        print("Balance: ", ray.get(ref))
+        ref = a.moving_min_deposit.remote('2007-01-01 10:00:00', '2077-01-01 10:00:00')
+        print("Moving min: ",ray.get(ref))
+        ref = a.moving_sum_deposit.remote('2007-01-01 10:00:00', '2077-01-01 10:00:00')
+        print("Moving sum: ",ray.get(ref))
