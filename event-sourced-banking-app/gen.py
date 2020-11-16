@@ -19,8 +19,15 @@ def printCmd(user: str, amount: int, command: str, actor: str):
 
 output = """import json
 import ray
+import os
+import shutil
 from command import Command
 from bankingactor import BankingActor
+
+if os.path.exists('data/banking.db'):
+    os.remove('data/banking.db')
+if os.path.exists('data/snapshots'):
+    shutil.rmtree('data/snapshots/')
 
 ray.init()
 """
@@ -35,13 +42,19 @@ allUsers = list(bank.keys())
 count = 0
 while count < num_events:
     user = random.choice(allUsers)
-    command = random.choice(["DEPOSIT"]) # add WITHDRAW later
+    command = random.choice(["DEPOSIT", "WITHDRAW"])
+    amount = random.randint(1, 1000)
     if command == "DEPOSIT":
-        amount = random.randint(1, 1000)
         bank[user] += amount
     elif command == "WITHDRAW":
-        pass
+        if amount > bank[user]:
+            continue
+        bank[user] -= amount
     output += printCmd(user, amount, command, actor)
+
+    if count % 100 == 0:
+        output += f"{actor}.snapshot.remote()\n"
+
     count += 1
 
 output += "\n"
