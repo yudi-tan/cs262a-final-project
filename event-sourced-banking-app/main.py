@@ -1,4 +1,6 @@
 import ray
+import os
+import shutil
 from command import Command
 import json
 from bankingactor import BankingActor
@@ -14,6 +16,12 @@ def add_command(type, user, amount):
         print(f"{type} command failed")
 
 if __name__ == "__main__":
+    # Remove any existing data otherwise tests break
+    if os.path.exists('data/banking.db'):
+        os.remove('data/banking.db')
+    if os.path.exists('data/snapshots'):
+        shutil.rmtree('data/snapshots/')
+
     ray.init()
 
     a = BankingActor.remote("./BankEventsSchema.txt")
@@ -34,6 +42,15 @@ if __name__ == "__main__":
     add_command("WITHDRAW", "alice", 100)
 
     a.snapshot.remote()
+    ref = a.retrieve_balance.remote("alice")
+    print("alice Balance: ", ray.get(ref))
+    ref = a.retrieve_balance.remote("bob")
+    print("bob Balance: ", ray.get(ref))
+
+    with open("data/snapshots/2.json", 'r') as f:
+        b = BankingActor.remote("./BankEventsSchema.txt", json.load(f))
+
+    print("Recovered from snapshot:")
     ref = a.retrieve_balance.remote("alice")
     print("alice Balance: ", ray.get(ref))
     ref = a.retrieve_balance.remote("bob")

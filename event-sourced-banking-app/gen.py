@@ -1,10 +1,11 @@
-import json, random
+import json, random, datetime
 
 num_users = 20
 num_events = 1000
+snapshot_interval = 100
 outputFile = f"test{num_events}.py"
 
-random.seed(0)
+random.seed(datetime.datetime.now())
 
 openBracket = '{'
 closeBracket = '}'
@@ -39,7 +40,8 @@ for i in range(num_users):
     bank["User" + str(i)] = 0
 allUsers = list(bank.keys())
 
-count = 0
+count = 1
+offsets = []
 while count < num_events:
     user = random.choice(allUsers)
     command = random.choice(["DEPOSIT", "WITHDRAW"])
@@ -52,8 +54,9 @@ while count < num_events:
         bank[user] -= amount
     output += printCmd(user, amount, command, actor)
 
-    if count % 100 == 0:
+    if count % snapshot_interval == 0:
         output += f"{actor}.snapshot.remote()\n"
+        offsets.append(count)
 
     count += 1
 
@@ -63,6 +66,14 @@ for user in allUsers:
     output += f"ref = {actor}.retrieve_balance.remote('{user}')\n"
     output += f"user_amount = ray.get(ref)\n"
     output += f"assert user_amount == {bank[user]}\n"
+
+output += "\n"
+
+# Validate that recovery using snapshots is valid
+offset = random.choice(offsets)
+output += f"with open('data/snapshots/{offset}.json', 'r') as f:\n"
+output += f"\treplayed = BankingActor.remote('./BankEventsSchema.txt', json.load(f))\n"
+output += f"ray.get({actor}.retrieve_ledger.remote()) == ray.get(replayed.retrieve_ledger.remote())\n"
 
 with open(outputFile, "w") as f:
     f.write(output)

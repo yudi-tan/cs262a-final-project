@@ -7,7 +7,7 @@ import os
 
 @ray.remote
 class BankingActor:
-    def __init__(self, db_schema):
+    def __init__(self, db_schema, snapshot=None):
         # this is the internal global state of the system. Constructured via
         # Event Sourcing.
         # Initialize database connection and replay events to build ledger.
@@ -16,8 +16,7 @@ class BankingActor:
         self.db = sqlite3.connect(pathname)
         self.__initialize_db(db_schema)
         self.ledger = {}
-        self.__replay_events()
-
+        self.__replay_events(snapshot)
 
     # Handles the C in "CQRS".
     # Input: command - command class which encapsulates
@@ -63,6 +62,9 @@ class BankingActor:
     def retrieve_balance(self, user):
         return self.ledger[user]
 
+    def retrieve_ledger(self):
+        return self.ledger
+
     # Handles the Q in "CQRS". More complicated query (i.e. filtering).
     # Input: start_time string, end_time string (in SQL timestamp format)
     # Output: int - minimum deposit within a time window
@@ -95,9 +97,14 @@ class BankingActor:
 
     # Reads and replays every event to build up the internal self.ledger state.
     # Called during actor initialization
-    def __replay_events(self):
+    def __replay_events(self, snapshot):
+        offset = 0
+        if snapshot:
+            snapshot_dict = json.loads(snapshot)
+            self.ledger = snapshot_dict["data"]
+            offset = snapshot_dict["offset"]
         c = self.db.cursor()
-        c.execute('SELECT * FROM bankevents')
+        c.execute('SELECT * FROM bankevents WHERE id > ?', [offset])
         for row in c:
             self.__process_event(row[1], row[2])
 
