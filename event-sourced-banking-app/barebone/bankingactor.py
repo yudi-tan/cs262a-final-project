@@ -7,7 +7,7 @@ import os
 snapshots = {}
 
 class BankingActor:
-    def __init__(self, snapshot=None):
+    def __init__(self, db_schema="", snapshot=None):
         self.ledger = {}
         self.log = []
         self.__replay_events(snapshot)

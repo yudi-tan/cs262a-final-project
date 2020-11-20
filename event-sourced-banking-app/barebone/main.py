@@ -15,7 +15,7 @@ def add_command(type, user, amount):
         print(f"{type} command failed")
 
 if __name__ == "__main__":
-    a = BankingActor()
+    a = BankingActor("./BankEventsSchema.txt")
     add_command("DEPOSIT", "alice", 100)
     add_command("WITHDRAW", "alice", 50)
 
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     res = a.retrieve_balance("bob")
     print("bob Balance: ", res)
 
-    b = BankingActor(snapshots[2])
+    b = BankingActor("./BankEventsSchema.txt", snapshots[2])
 
     print("Recovered from snapshot:")
     res = a.retrieve_balance("alice")
