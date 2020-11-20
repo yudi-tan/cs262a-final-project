@@ -7,10 +7,9 @@ from bankingactor import BankingActor
 
 def add_command(type, user, amount):
     payload_dict = {}
-    payload_dict["user"] = user
     payload_dict["amount"] = amount
     payload = json.dumps(payload_dict, indent = 4)
-    command = Command(type, payload)
+    command = Command(user, type, payload)
     ref = a.process_command.remote(command)
     if not ray.get(ref):
         print(f"{type} command failed")
@@ -47,8 +46,7 @@ if __name__ == "__main__":
     ref = a.retrieve_balance.remote("bob")
     print("bob Balance: ", ray.get(ref))
 
-    with open("data/snapshots/2.json", 'r') as f:
-        b = BankingActor.remote("./BankEventsSchema.txt", json.load(f))
+    b = BankingActor.remote("./BankEventsSchema.txt")
 
     print("Recovered from snapshot:")
     ref = a.retrieve_balance.remote("alice")

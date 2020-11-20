@@ -14,7 +14,7 @@ def printCmd(user: str, amount: int, command: str, actor: str):
     assert command == "DEPOSIT" or command == "WITHDRAW"
     ret  = f"payload_dict = {openBracket} 'user': '{user}', 'amount': {amount} {closeBracket}\n"
     ret += "payload = json.dumps(payload_dict)\n"
-    ret += f"command = Command('{command}', payload)\n"
+    ret += f"command = Command('{user}', '{command}', payload)\n"
     ret += f"{actor}.process_command.remote(command)\n"
     return ret
 
@@ -42,6 +42,7 @@ allUsers = list(bank.keys())
 
 count = 1
 offsets = []
+validate_offset = 0
 while count < num_events:
     user = random.choice(allUsers)
     command = random.choice(["DEPOSIT", "WITHDRAW"])
@@ -55,8 +56,14 @@ while count < num_events:
     output += printCmd(user, amount, command, actor)
 
     if count % snapshot_interval == 0:
+        validate_offset = random.randint(count, count + 9)
         output += f"{actor}.snapshot.remote()\n"
         offsets.append(count)
+
+    if count == validate_offset:
+        # Validate that replay by snapshots is valid
+        output += f"replayed = BankingActor.remote('./BankEventsSchema.txt')\n"
+        output += f"assert ray.get({actor}.retrieve_ledger.remote()) == ray.get(replayed.retrieve_ledger.remote())\n"
 
     count += 1
 
@@ -66,14 +73,6 @@ for user in allUsers:
     output += f"ref = {actor}.retrieve_balance.remote('{user}')\n"
     output += f"user_amount = ray.get(ref)\n"
     output += f"assert user_amount == {bank[user]}\n"
-
-output += "\n"
-
-# Validate that recovery using snapshots is valid
-offset = random.choice(offsets)
-output += f"with open('data/snapshots/{offset}.json', 'r') as f:\n"
-output += f"\treplayed = BankingActor.remote('./BankEventsSchema.txt', json.load(f))\n"
-output += f"ray.get({actor}.retrieve_ledger.remote()) == ray.get(replayed.retrieve_ledger.remote())\n"
 
 with open(outputFile, "w") as f:
     f.write(output)
