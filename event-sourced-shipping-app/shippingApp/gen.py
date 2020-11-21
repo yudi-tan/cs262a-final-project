@@ -16,28 +16,28 @@ companyNameLen = 5
 
 cargoNameLen = 10
 
-numEvents = 1000
+numEvents = 1
 eventProbabilityOfCompany = 0.05
 # number of events for companies = numEvents*eventProbabilityOfCompany
 
-outputFile = "test0.py"
+outputFile = f"test{numEvents}.py"
 
 ########
 random.seed(0)
 
-allPortNames = ["Port" + i for i in range(numPorts)]
+allPortNames = ["Port" + str(i) for i in range(numPorts)]
 # allPortNames = []
 # while len(allPortNames) < numPorts:
 #     name = "".join([random.choice(string.ascii_uppercase) for _ in range(portNameLen)])
 #     allPortNames.append(name) if name not in allPortNames else None
 
-allShipNames = ["Ship" + i for i in range(numShips)]
+allShipNames = ["Ship" + str(i) for i in range(numShips)]
 # allShipNames = []
 # while len(allShipNames) < numShips:
 #     name = "".join([random.choice(string.ascii_letters) for _ in range(shipNameLen)])
 #     allShipNames.append(name) if name not in allShipNames else None
 
-allCompanyNames = ["Company" + i for i in range(numShips)]
+allCompanyNames = ["Company" + str(i) for i in range(numShips)]
 # allCompanyNames = []
 # while len(allCompanyNames) < numCompanies:
 #     name = "".join([random.choice(string.ascii_letters) for _ in range(companyNameLen)])

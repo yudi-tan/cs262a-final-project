@@ -5,14 +5,12 @@ num_events = 1000
 snapshot_interval = 100
 outputFile = f"test{num_events}.py"
 
-random.seed(datetime.datetime.now())
-
-openBracket = '{'
-closeBracket = '}'
+# random.seed(datetime.datetime.now())
+random.seed(0)
 
 def printCmd(user: str, amount: int, command: str, actor: str):
     assert command == "DEPOSIT" or command == "WITHDRAW"
-    ret  = f"payload_dict = {openBracket} 'user': '{user}', 'amount': {amount} {closeBracket}\n"
+    ret  = f"payload_dict = {{ 'user': '{user}', 'amount': {amount} }}\n"
     ret += "payload = json.dumps(payload_dict)\n"
     ret += f"command = Command('{user}', '{command}', payload)\n"
     ret += f"{actor}.process_command.remote(command)\n"
