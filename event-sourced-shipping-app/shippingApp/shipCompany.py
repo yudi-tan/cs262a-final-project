@@ -96,7 +96,7 @@ class ShipCompany(Actor): # global single-instance implementation
             super().__init__()
             self.ship = ship
             self.company = company
-    
+
     class Unacquire(Event):
         def __init__(self, ship: Ship, company: str):
             super().__init__()

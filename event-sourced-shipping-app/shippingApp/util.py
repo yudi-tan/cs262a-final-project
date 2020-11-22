@@ -5,7 +5,7 @@ class Actor(abc.ABC): ...
 class Event(abc.ABC):
     def __init__(self):
         self.happened = time.time()
-    
+
     def __repr__(self):
         return f"{self.__class__.__qualname__} event: {self.__dict__}"
 

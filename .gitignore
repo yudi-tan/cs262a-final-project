@@ -140,7 +140,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-
-# project specific
-event-sourced-banking-app/end-to-end/data
-event-sourced-banking-app/ray/data/
