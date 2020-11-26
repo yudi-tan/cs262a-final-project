@@ -16,8 +16,7 @@ companyNameLen = 5
 
 cargoNameLen = 10
 
-numEvents = 1000
-snapshot_interval = 100
+numEvents = 1
 eventProbabilityOfCompany = 0.05
 # number of events for companies = numEvents*eventProbabilityOfCompany
 
@@ -51,19 +50,19 @@ class ShipGen:
         self.location: str = location
         self.owner: str = ""
         self.cargo: List[str] = []
-
+    
     def depart(self, origin: str):
         self.location = "SEA"
-
+    
     def arrive(self, target: str):
         self.location = target
-
+    
     def load(self, cargo: str):
         self.cargo.append(cargo)
-
+    
     def unload(self, cargo: str):
         self.cargo.remove(cargo)
-
+    
     def getActions(self) -> List[str]:
         ret = []
         if self.location == "SEA":
@@ -79,18 +78,18 @@ class CompanyGen:
     def __init__(self):
         # self.ships: Dict[str, List[Ship]] = {}
         self.ships = {}
-
+    
     def establish(self, name):
         self.ships[name] = list()
-
+    
     def acquire(self, ship, company):
         self.ships[company].append(ship)
         ship.owner = company
-
+        
     def unacquire(self, ship, company):
         self.ships[company].remove(ship)
         ship.owner = ""
-
+    
     def transfer(self, ship, oldCompany, newCompany):
         self.ships[oldCompany].remove(ship)
         self.ships[newCompany].append(ship)
@@ -151,10 +150,6 @@ while count < numEvents:
             cargo = random.choice(ship.cargo)
             output += f"{name}.unload.remote('{cargo}')\n"
             ship.unload(cargo)
-    if count % snapshot_interval == 0:
-        output += "for company in ray.get(sc.getState.remote()).values():\n"
-        output += "\tfor ship in company:\n"
-        output += "\t\tship.snapshot.remote()\n"
     count += 1
 
 output += "\nlog = ray.get(sc.getGlobalLogStream.remote())\n"

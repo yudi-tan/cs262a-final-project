@@ -1,9 +1,13 @@
 import abc
+import os
+import json
 from typing import List
 
 import pymongo, ray
 
 from util import Actor, Event
+
+SNAPSHOTS_DIR = 'data/snapshots'
 
 # class ref_src:
 #     def __init__(self, parent_ref):
@@ -19,11 +23,25 @@ class Ship(Actor):
         self.owner: str
         self.cargo: List[str]
         # self.log: List[Event] = list()
+        self.offset = 0
         self.client = pymongo.MongoClient(db)
         self.db = self.client.shipping_app
         self.collection = self.db.ship_logs
         if not replay:
             self.on(Ship.Creation(name, location))
+
+    # Create a snapshot of the current state
+    def snapshot(self):
+        snapshot_dict = {}
+        snapshot_dict["location"] = self.location
+        snapshot_dict["owner"] = self.offset
+        snapshot_dict["cargo"] = self.cargo
+        snapshot_dict["offset"] = self.offset
+
+        pathname = os.path.join(SNAPSHOTS_DIR, self.name, f'{self.offset}.json')
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        with open(pathname, 'w') as f:
+            json.dump(snapshot_dict, f, indent = 4)
 
     def eventHandler(self, event: Event):
         if not isinstance(event, Event):
@@ -52,6 +70,7 @@ class Ship(Actor):
             **event.to_dict()
         })
         # self.log.append(event)
+        self.offset += 1
         self.eventHandler(event)
 
     def depart(self, origin: str):
@@ -92,9 +111,23 @@ class Ship(Actor):
 
     @staticmethod
     def replay(events: List[Event]):
-        ret = Ship.remote("", "", True)
-        for event in events:
-            ret.on.remote(event)
+        assert len(events) > 0 and isinstance(events[0], Ship.Creation)
+        ret = Ship.remote(events[0].ship, events[0].port, True)
+
+        path = os.path.join(SNAPSHOTS_DIR, ret.name)
+        if os.path.exists(path):
+            snapshots = os.listdir(path)
+            if snapshots:
+                with open(os.path.join(SNAPSHOTS_DIR, max(snapshots)), 'r') as f:
+                    snapshot_dict = json.load(f)
+                ret.location = snapshot_dict["location"]
+                ret.offset = snapshot_dict["owner"]
+                ret.cargo = snapshot_dict["cargo"]
+                ret.offset = snapshot_dict["offset"]
+
+        while ret.offset < len(events):
+            self.eventHandler(event)
+            ret.offset += 1
         return ret
 
     class InvalidActionException(Exception):...
