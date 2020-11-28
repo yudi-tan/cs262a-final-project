@@ -3,12 +3,15 @@ from typing import Any, List
 
 class Actor(abc.ABC): ...
 class Event(abc.ABC):
-    def __init__(self):
-        self.happened = time.time()
-    
+    def __init__(self, happened: str=None):
+        if happened:
+            self.happened = happened
+        else:
+            self.happened = time.time()
+
     def __repr__(self):
         return f"{self.__class__.__qualname__} event: {self.__dict__}"
-    
+
     def to_dict(self):
         return self.__dict__
 

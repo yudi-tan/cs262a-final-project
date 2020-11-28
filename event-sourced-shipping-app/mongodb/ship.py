@@ -1,7 +1,7 @@
 import abc
 import os
 import json
-from typing import List
+from typing import List, Dict
 
 import pymongo, ray
 
@@ -16,7 +16,7 @@ SNAPSHOTS_DIR = 'data/snapshots'
 
 @ray.remote
 class Ship(Actor):
-    def __init__(self, name: str, location: str, db="mongodb://localhost:27017/", replay: bool = False):
+    def __init__(self, name: str, location: str, db="mongodb://localhost:27017/", replay: bool=False):
         self.name: str
         self.location: str
         # self.owner: ShipCompany
@@ -27,14 +27,33 @@ class Ship(Actor):
         self.client = pymongo.MongoClient(db)
         self.db = self.client.shipping_app
         self.collection = self.db.ship_logs
-        if not replay:
+        if replay:
+            path = os.path.join(SNAPSHOTS_DIR, name)
+            if os.path.exists(path):
+                snapshots = os.listdir(path)
+                if snapshots:
+                    with open(os.path.join(path, max(snapshots)), 'r') as f:
+                        snapshot_dict = json.load(f)
+                    self.name = snapshot_dict["name"]
+                    self.location = snapshot_dict["location"]
+                    self.owner = snapshot_dict["owner"]
+                    self.cargo = snapshot_dict["cargo"]
+                    self.offset = snapshot_dict["offset"]
+
+            selected = self.collection.find({'ship': name}).skip(self.offset)
+            for eventDict in selected:
+                event = Ship.eventFromDict(eventDict)
+                self.offset += 1
+                self.eventHandler(event)
+        else:
             self.on(Ship.Creation(name, location))
 
     # Create a snapshot of the current state
     def snapshot(self):
         snapshot_dict = {}
+        snapshot_dict["name"] = self.name
         snapshot_dict["location"] = self.location
-        snapshot_dict["owner"] = self.offset
+        snapshot_dict["owner"] = self.owner
         snapshot_dict["cargo"] = self.cargo
         snapshot_dict["offset"] = self.offset
 
@@ -109,62 +128,58 @@ class Ship(Actor):
         return [entry for entry in self.collection.find({"ship": self.name})]
         # return self.log
 
-    @staticmethod
-    def replay(events: List[Event]):
-        assert len(events) > 0 and isinstance(events[0], Ship.Creation)
-        ret = Ship.remote(events[0].ship, events[0].port, True)
-
-        path = os.path.join(SNAPSHOTS_DIR, ret.name)
-        if os.path.exists(path):
-            snapshots = os.listdir(path)
-            if snapshots:
-                with open(os.path.join(SNAPSHOTS_DIR, max(snapshots)), 'r') as f:
-                    snapshot_dict = json.load(f)
-                ret.location = snapshot_dict["location"]
-                ret.offset = snapshot_dict["owner"]
-                ret.cargo = snapshot_dict["cargo"]
-                ret.offset = snapshot_dict["offset"]
-
-        while ret.offset < len(events):
-            self.eventHandler(event)
-            ret.offset += 1
-        return ret
-
     class InvalidActionException(Exception):...
 
     class Creation(Event):
-        def __init__(self, ship: str, port: str):
-            super().__init__()
+        def __init__(self, ship: str, port: str, happened: str=None):
+            super().__init__(happened)
             self.ship = ship
             self.port = port
 
     class TransferOwnership(Event):
         # def __init__(self, owner: ShipCompany):
-        def __init__(self, ship: str, owner: str):
-            super().__init__()
+        def __init__(self, ship: str, owner: str, happened: str=None):
+            super().__init__(happened)
             self.ship = ship
             self.owner = owner
 
     class Departure(Event):
-        def __init__(self, ship: str, port: str):
-            super().__init__()
+        def __init__(self, ship: str, port: str, happened: str=None):
+            super().__init__(happened)
             self.ship = ship
             self.port = port
 
     class Arrival(Event):
-        def __init__(self, ship: str, port: str):
-            super().__init__()
+        def __init__(self, ship: str, port: str, happened: str=None):
+            super().__init__(happened)
             self.ship = ship
             self.port = port
 
     class Load(Event):
-        def __init__(self, ship: str, cargo: str):
-            super().__init__()
+        def __init__(self, ship: str, cargo: str, happened: str=None):
+            super().__init__(happened)
             self.ship = ship
             self.cargo = cargo
 
     class Unload(Event):
-        def __init__(self, ship: str, cargo: str):
-            super().__init__()
+        def __init__(self, ship: str, cargo: str, happened: str=None):
+            super().__init__(happened)
             self.ship = ship
             self.cargo = cargo
+
+    @staticmethod
+    def eventFromDict(dict: Dict[str, str]):
+        if dict["type"] == "Ship.Creation":
+            return Ship.Creation(dict["ship"], dict["port"], dict["happened"])
+        elif dict["type"] == "Ship.TransferOwnership":
+            return Ship.TransferOwnership(dict["ship"], dict["owner"], dict["happened"])
+        elif dict["type"] == "Ship.Departure":
+            return Ship.Departure(dict["ship"], dict["port"], dict["happened"])
+        elif dict["type"] == "Ship.Arrival":
+            return Ship.Arrival(dict["ship"], dict["port"], dict["happened"])
+        elif dict["type"] == "Ship.Load":
+            return Ship.Load(dict["ship"], dict["cargo"], dict["happened"])
+        elif dict["type"] == "Ship.Unload":
+            return Ship.Unload(dict["ship"], dict["cargo"], dict["happened"])
+        else:
+            raise NotImplementedError

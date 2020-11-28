@@ -97,10 +97,13 @@ class CompanyGen:
         ship.owner = newCompany
 
 
-output = """import pymongo, ray
+output = """import pymongo, ray, shutil
 
 from ship import *
 from shipCompany import *
+
+if os.path.exists('data/snapshots'):
+    shutil.rmtree('data/snapshots/')
 
 ray.init()
 
@@ -162,6 +165,15 @@ while count < numEvents:
         output += "\tfor ship in company:\n"
         output += "\t\tship.snapshot.remote()\n"
     count += 1
+
+output += "\n"
+
+for name in allShipNames:
+    output += f"replayed = Ship.remote('{name}', '', replay=True)\n"
+    output += f"assert ray.get(replayed.getName.remote()) == ray.get({name}.getName.remote())\n"
+    output += f"assert ray.get(replayed.getLocation.remote()) == ray.get({name}.getLocation.remote())\n"
+    output += f"assert ray.get(replayed.getOwner.remote()) == ray.get({name}.getOwner.remote())\n"
+    output += f"assert ray.get(replayed.getCargo.remote()) == ray.get({name}.getCargo.remote())\n"
 
 output += "\nlog = ray.get(sc.getGlobalLogStream.remote())\n"
 
