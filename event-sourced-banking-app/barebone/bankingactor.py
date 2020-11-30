@@ -10,7 +10,7 @@ LOG_DIR = 'data/log'
 class BankingActor:
     def __init__(self):
         self.ledger = {} 
-        self.offset = 0
+        self.offset = -1
         # on initialization, we load the latest snapshot and update internal state.
         if os.path.exists(SNAPSHOTS_DIR):
             snapshots = os.listdir(SNAPSHOTS_DIR)
@@ -61,6 +61,7 @@ class BankingActor:
         os.makedirs(os.path.dirname(pathname), exist_ok=True)
         with open(pathname, 'w') as f:
             json.dump(snapshot_dict, f, indent = 4)
+        f.close()
     
     # Handles the Q in "CQRS"
     # Input: user - string representing the user (username)
@@ -71,7 +72,7 @@ class BankingActor:
         # using the offset, retrieve all relevant events which occured after
         # snapshot
         logfile = open(LOG_DIR + "/logfile.txt", "r")
-        for line in logfile.readlines()[self.offset+2:]:
+        for line in logfile.readlines()[self.offset+1:]:
             if not line:
                 break
             log_entry = json.loads(line)
@@ -88,15 +89,14 @@ class BankingActor:
     # Builds and retrieves the latest ledger state
     def retrieve_ledger(self):
         self.__replay_events()
-        print(self.ledger)
         return self.ledger
 
     # updates the internal states to reflect the latest entries.
     def __replay_events(self):
         logfile = open(LOG_DIR + "/logfile.txt", "r")
-        i = 0
-        lines = logfile.readlines()
-        for line in lines:
+        for i, line in enumerate(logfile.readlines()):
+            if i <= self.offset:
+                continue
             if not line:
                 break
             log_entry = json.loads(line)
@@ -107,7 +107,6 @@ class BankingActor:
                 self.ledger[payload["user"]] -= payload["amount"]
             elif log_entry["command_type"] == "DEPOSIT":
                 self.ledger[payload["user"]] += payload["amount"]
-            self.offset = i # self.offset records the latest offset of the logs which 
-            i += 1
+            self.offset = i
         logfile.close()
         return

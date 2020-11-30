@@ -1,7 +1,7 @@
 import json, random, datetime
 
 num_users = 20
-num_events = 1000
+num_events = 10000
 snapshot_interval = 100
 outputFile = f"test{num_events}_{snapshot_interval}.py"
 
