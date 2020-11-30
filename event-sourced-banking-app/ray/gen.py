@@ -2,7 +2,7 @@ import json, random, datetime
 
 num_users = 20
 num_events = 1000
-snapshot_interval = 100
+snapshot_interval = 1500
 outputFile = f"test{num_events}.py"
 
 # random.seed(datetime.datetime.now())
@@ -20,6 +20,7 @@ output = """import json
 import ray
 import os
 import shutil
+import time
 from command import Command
 from bankingactor import BankingActor
 
@@ -29,6 +30,7 @@ if os.path.exists('data/snapshots'):
     shutil.rmtree('data/snapshots/')
 
 ray.init()
+t0 = time.time()
 """
 actor = "bank"
 output += f"{actor} = BankingActor.remote('./BankEventsSchema.txt')\n\n"
@@ -71,6 +73,9 @@ for user in allUsers:
     output += f"ref = {actor}.retrieve_balance.remote('{user}')\n"
     output += f"user_amount = ray.get(ref)\n"
     output += f"assert user_amount == {bank[user]}\n"
+
+output += "t1 = time.time()\n"
+output += "print(t1 - t0)\n"
 
 with open(outputFile, "w") as f:
     f.write(output)
