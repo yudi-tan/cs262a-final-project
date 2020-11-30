@@ -4,78 +4,110 @@ import datetime
 import time
 import os
 
-snapshots = {}
+SNAPSHOTS_DIR = 'data/snapshots'
+LOG_DIR = 'data/log'
 
 class BankingActor:
-    def __init__(self, db_schema="", snapshot=None):
-        self.ledger = {}
-        self.log = []
-        self.__replay_events(snapshot)
+    def __init__(self):
+        self.ledger = {} 
+        self.offset = 0
+        # on initialization, we load the latest snapshot and update internal state.
+        if os.path.exists(SNAPSHOTS_DIR):
+            snapshots = os.listdir(SNAPSHOTS_DIR)
+            if snapshots:
+                with open(os.path.join(SNAPSHOTS_DIR, max(snapshots)), 'r') as f:
+                    snapshot_dict = json.load(f)
+                self.ledger = snapshot_dict["data"]
+                self.offset = snapshot_dict["offset"]
+                f.close()
+        # create logfile if not exist
+        if not os.path.exists(LOG_DIR):
+            os.makedirs(LOG_DIR)
+            open(LOG_DIR + "/logfile.txt", "w").close()
+        
     
     def process_command(self, command):
+        # basic command validation.
         if command.command_type == "WITHDRAW":
             event_dict = json.loads(command.payload)
-            if event_dict["amount"] > self.ledger.get(event_dict["user"], 0):
+            curr_balance = self.retrieve_balance(event_dict["user"])
+            if event_dict["amount"] > curr_balance:
                 return False
         elif command.command_type != "DEPOSIT":
             return False
-        
-        self.log.append((command.command_type, command.payload, datetime.date.today().strftime("%Y-%m-%d %H:%M:%S")))
-        self.__process_event(command.command_type, command.payload)
+
+        # Store event in WAL.
+        log_entry = {}
+        log_entry["command_type"] = command.command_type
+        log_entry["payload"] = command.payload
+        log_entry["timestamp"] = datetime.date.today().strftime("%Y-%m-%d %H:%M:%S")
+        log_str = json.dumps(log_entry) + "\n"
+        logfile = open(LOG_DIR + "/logfile.txt", "a")
+        logfile.write(log_str)
+        logfile.close()
         return True
     
+    # Create a snapshot of the current state
     def snapshot(self):
-        offset = len(self.log)
+        # update the internal state to include the latest entries
+        self.__replay_events()
+        # once internal state is up-to-date, we create the snapshot entry.
         snapshot_dict = {}
         snapshot_dict["data"] = self.ledger
-        snapshot_dict["offset"] = offset # placeholder
+        snapshot_dict["offset"] = self.offset
         snapshot_dict["timestamp"] = datetime.date.today().strftime("%d-%m-%Y %H:%M:%S")
-        snapshot = json.dumps(snapshot_dict, indent = 4)
 
-        snapshots[offset] = snapshot
+        pathname = os.path.join(SNAPSHOTS_DIR, f'{self.offset}.json')
+        os.makedirs(os.path.dirname(pathname), exist_ok=True)
+        with open(pathname, 'w') as f:
+            json.dump(snapshot_dict, f, indent = 4)
     
+    # Handles the Q in "CQRS"
+    # Input: user - string representing the user (username)
+    # Output: int - user's balance
     def retrieve_balance(self, user):
-        return self.ledger[user]
-    
+        # read from latest snapshot (in-memory)
+        cur_balance = self.ledger.get(user, 0)
+        # using the offset, retrieve all relevant events which occured after
+        # snapshot
+        logfile = open(LOG_DIR + "/logfile.txt", "r")
+        for line in logfile.readlines()[self.offset+2:]:
+            if not line:
+                break
+            log_entry = json.loads(line)
+            payload = json.loads(log_entry["payload"])
+            if payload["user"] == user:
+                if log_entry["command_type"] == "WITHDRAW":
+                    cur_balance -= payload["amount"]
+                elif log_entry["command_type"] == "DEPOSIT":
+                    cur_balance += payload["amount"]
+        logfile.close()
+        return cur_balance
+
+
+    # Builds and retrieves the latest ledger state
     def retrieve_ledger(self):
+        self.__replay_events()
+        print(self.ledger)
         return self.ledger
 
-    def moving_min_deposit(self, start_time, end_time):
-        q = filter(lambda e: e[2] >= start_time and e[2] <= end_time, self.log)
-        result = float('inf')
-        for event in q:
-            if event[0] == "DEPOSIT":
-                event_dict = json.loads(event[1])
-                amount = event_dict["amount"]
-                result = min(result, amount)
-        if result == float('inf'):
-            return 0
-        return result
-    
-    def moving_sum_deposit(self, start_time, end_time):
-        q = filter(lambda e: e[2] >= start_time and e[2] <= end_time, self.log)
-        total = 0
-        for event in q:
-            if event[0] == "DEPOSIT":
-                event_dict = json.loads(event[1])
-                amount = event_dict["amount"]
-                total += amount
-        return total
-    
-    def __replay_events(self, snapshot):
-        offset = 0
-        if snapshot:
-            snapshot_dict = json.loads(snapshot)
-            self.ledger = snapshot_dict["data"]
-            offset = snapshot_dict["offset"]
-        for event in self.log[offset:]:
-            self.__process_event(event[0], event[1])
-
-    def __process_event(self, event_type, payload):
-        event_dict = json.loads(payload)
-        user = event_dict["user"]
-        amount = event_dict["amount"]
-        if event_type == "DEPOSIT":
-            self.ledger[user] = self.ledger.get(user, 0) + amount
-        elif event_type == "WITHDRAW":
-            self.ledger[user] -= amount
+    # updates the internal states to reflect the latest entries.
+    def __replay_events(self):
+        logfile = open(LOG_DIR + "/logfile.txt", "r")
+        i = 0
+        lines = logfile.readlines()
+        for line in lines:
+            if not line:
+                break
+            log_entry = json.loads(line)
+            payload = json.loads(log_entry["payload"])
+            if payload["user"] not in self.ledger:
+                self.ledger[payload["user"]] = 0
+            if log_entry["command_type"] == "WITHDRAW":
+                self.ledger[payload["user"]] -= payload["amount"]
+            elif log_entry["command_type"] == "DEPOSIT":
+                self.ledger[payload["user"]] += payload["amount"]
+            self.offset = i # self.offset records the latest offset of the logs which 
+            i += 1
+        logfile.close()
+        return

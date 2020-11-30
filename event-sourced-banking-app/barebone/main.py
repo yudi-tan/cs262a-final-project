@@ -15,7 +15,7 @@ def add_command(type, user, amount):
         print(f"{type} command failed")
 
 if __name__ == "__main__":
-    a = BankingActor("./BankEventsSchema.txt")
+    a = BankingActor()
     add_command("DEPOSIT", "alice", 100)
     add_command("WITHDRAW", "alice", 50)
 
