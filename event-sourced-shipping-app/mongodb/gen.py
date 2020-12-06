@@ -65,7 +65,7 @@ class ShipGen:
         self.cargo.remove(cargo)
 
     def getActions(self) -> List[str]:
-        ret = ["getLocation"]
+        ret = ["getLocation", "getOwner"]
 
         if self.cargo:
             ret += ["getCargo"]
@@ -153,6 +153,9 @@ while count < numEvents:
         action = random.choice(ship.getActions())
         if action == "getLocation":
             output += f"assert \"{ship.location}\" == ray.get({name}.getLocation.remote())\n"
+            Qs += 1
+        elif action == "getOwner":
+            output += f"assert \"{ship.owner}\" == ray.get({name}.getOwner.remote())\n"
             Qs += 1
         elif action == "getCargo":
             output += f"for piece in ray.get({name}.getCargo.remote()):\n"
