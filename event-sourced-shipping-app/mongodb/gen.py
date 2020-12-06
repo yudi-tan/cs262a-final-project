@@ -117,6 +117,7 @@ db.drop_collection("ship_logs")
 db.drop_collection("company_logs")
 
 sc: ShipCompany = ShipCompany.remote()
+sc_obj_ref: ray._raylet.ObjectID
 """
 output += f"\n# numEvents = {numEvents}, numShips = {numShips}, numCompanies = {numCompanies}\n"
 insertion_ind = len(output)
@@ -128,9 +129,12 @@ for name in allCompanyNames:
 allShips = []
 for name in allShipNames:
     startingPort = random.choice(allPortNames)
-    allShips.append(ShipGen(name, startingPort))
+    ship = ShipGen(name, startingPort)
+    allShips.append(ship)
     output += f"{name}: Ship = Ship.remote('{name}', '{startingPort}')\n"
-    output += f"sc.acquire.remote({name}, '{random.choice(allCompanyNames)}')\n"
+    company = random.choice(allCompanyNames)
+    sc.acquire(ship, company)
+    output += f"sc_obj_ref = sc.acquire.remote({name}, '{company}')\n"
 
 output += "\n"
 
@@ -144,7 +148,7 @@ while count < numEvents:
         if len(sc.ships[old]) == 0:
             continue
         ship = random.choice(sc.ships[old])
-        output += f"sc.transfer.remote({ship}, '{old}', '{new}')\n"
+        output += f"sc_obj_ref = sc.transfer.remote({ship.name}, '{old}', '{new}')\n"
         sc.transfer(ship, old, new)
     else:
         # Ship event
@@ -155,6 +159,8 @@ while count < numEvents:
             output += f"assert \"{ship.location}\" == ray.get({name}.getLocation.remote())\n"
             Qs += 1
         elif action == "getOwner":
+            # The get call ensures any potential transfer operations are completed first, as ships and the ship company run in parallel.
+            output += f"ray.get(sc_obj_ref)\n"
             output += f"assert \"{ship.owner}\" == ray.get({name}.getOwner.remote())\n"
             Qs += 1
         elif action == "getCargo":
