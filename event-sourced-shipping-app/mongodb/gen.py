@@ -65,7 +65,11 @@ class ShipGen:
         self.cargo.remove(cargo)
 
     def getActions(self) -> List[str]:
-        ret = []
+        ret = ["getLocation"]
+
+        if self.cargo:
+            ret += ["getCargo"]
+
         if self.location == "SEA":
             # we can only arrive
             ret += ["arrive"]
@@ -115,6 +119,7 @@ db.drop_collection("company_logs")
 sc: ShipCompany = ShipCompany.remote()
 """
 output += f"\n# numEvents = {numEvents}, numShips = {numShips}, numCompanies = {numCompanies}\n"
+insertion_ind = len(output)
 sc = CompanyGen()
 for name in allCompanyNames:
     sc.establish(name)
@@ -130,6 +135,8 @@ for name in allShipNames:
 output += "\n"
 
 count = 0
+Qs = 0
+Cs = 0
 while count < numEvents:
     if random.random() < eventProbabilityOfCompany:
         # Company event
@@ -144,28 +151,39 @@ while count < numEvents:
         ship = random.choice(allShips)
         name = ship.name
         action = random.choice(ship.getActions())
-        if action == "arrive":
+        if action == "getLocation":
+            output += f"assert \"{ship.location}\" == ray.get({name}.getLocation.remote())\n"
+            Qs += 1
+        elif action == "getCargo":
+            output += f"for piece in ray.get({name}.getCargo.remote()):\n"
+            output += f"\t assert piece in {ship.cargo}\n"
+            Qs += 1
+        elif action == "arrive":
             target = random.choice(allPortNames)
             output += f"{name}.arrive.remote('{target}')\n"
             ship.arrive(target)
+            Cs += 1
         elif action == "depart":
             origin = ship.location
             output += f"{name}.depart.remote('{origin}')\n"
             ship.depart(origin)
+            Cs += 1
         elif action == "load":
             cargo = "".join([random.choice(string.ascii_letters) for _ in range(cargoNameLen)])
             output += f"{name}.load.remote('{cargo}')\n"
             ship.load(cargo)
+            Cs += 1
         elif action == "unload":
             cargo = random.choice(ship.cargo)
             output += f"{name}.unload.remote('{cargo}')\n"
             ship.unload(cargo)
+            Cs += 1
     if count % snapshot_interval == 0:
         output += "for company in ray.get(sc.getState.remote()).values():\n"
         output += "\tfor ship in company:\n"
         output += "\t\tship.snapshot.remote()\n"
     count += 1
-
+output = output[:insertion_ind] + f"# num_queries = {Qs}, num_commands = {Cs}\n\n" + output[insertion_ind:]
 output += "\n"
 
 for name in allShipNames:
