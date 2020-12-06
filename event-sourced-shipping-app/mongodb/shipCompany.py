@@ -11,11 +11,10 @@ from ship import Ship
 class ShipCompany(Actor): # global single-instance implementation
     def __init__(self, db="mongodb://localhost:27017/", replay: bool = False):
         self.ships: Dict[str, List[Ship]] = dict()
-        # self.log: List[Event] = list()
         self.client = pymongo.MongoClient(db)
         self.db = self.client.shipping_app
         self.collection = self.db.company_logs
-    
+
     def eventHandler(self, event: Event):
         if not isinstance(event, Event):
             return
@@ -29,7 +28,6 @@ class ShipCompany(Actor): # global single-instance implementation
                     self.ships[event.company].remove(ship)
                     break
         elif isinstance(event, ShipCompany.Transfer):
-            # self.ships[event.oldCompany].remove(event.ship)
             for ship in self.ships[event.oldCompany].copy():
                 if handleEQ(ship, event.ship):
                     self.ships[event.oldCompany].remove(ship)
@@ -67,11 +65,8 @@ class ShipCompany(Actor): # global single-instance implementation
     def transfer(self, ship: Ship, oldCompany: str, newCompany: str):
         if ray.get(ship.getOwner.remote()) != oldCompany:
             raise ShipCompany.InvalidActionException
-        # print(self.ships[oldCompany], ship, ship in self.ships[oldCompany])
         if not any([handleEQ(ship, shipIter) for shipIter in self.ships[oldCompany]]):
             raise ShipCompany.InvalidActionException
-        # if ship not in self.ships[oldCompany]:
-        #     raise ShipCompany.InvalidActionException
         if ship._actor_id not in [x._actor_id for x in self.ships[oldCompany]]:
             raise ShipCompany.InvalidActionException
         if newCompany not in self.ships.keys():
@@ -81,7 +76,7 @@ class ShipCompany(Actor): # global single-instance implementation
 
     def getState(self):
         return self.ships
-    
+
     def getLog(self, company: str = ""):
         if company == "":
             return [entry for entry in self.collection.find()]
@@ -112,7 +107,7 @@ class ShipCompany(Actor): # global single-instance implementation
             super().__init__()
             self.ship = ship
             self.company = company
-    
+
     class Unacquire(Event):
         def __init__(self, ship: Ship, company: str):
             super().__init__()

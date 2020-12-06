@@ -26,22 +26,8 @@ outputFile = f"test{numEvents}.py"
 random.seed(0)
 
 allPortNames = ["Port" + str(i) for i in range(numPorts)]
-# allPortNames = []
-# while len(allPortNames) < numPorts:
-#     name = "".join([random.choice(string.ascii_uppercase) for _ in range(portNameLen)])
-#     allPortNames.append(name) if name not in allPortNames else None
-
 allShipNames = ["Ship" + str(i) for i in range(numShips)]
-# allShipNames = []
-# while len(allShipNames) < numShips:
-#     name = "".join([random.choice(string.ascii_letters) for _ in range(shipNameLen)])
-#     allShipNames.append(name) if name not in allShipNames else None
-
 allCompanyNames = ["Company" + str(i) for i in range(numShips)]
-# allCompanyNames = []
-# while len(allCompanyNames) < numCompanies:
-#     name = "".join([random.choice(string.ascii_letters) for _ in range(companyNameLen)])
-#     allCompanyNames.append(name) if name not in allCompanyNames else None
 
 
 class ShipGen:
@@ -50,19 +36,19 @@ class ShipGen:
         self.location: str = location
         self.owner: str = ""
         self.cargo: List[str] = []
-    
+
     def depart(self, origin: str):
         self.location = "SEA"
-    
+
     def arrive(self, target: str):
         self.location = target
-    
+
     def load(self, cargo: str):
         self.cargo.append(cargo)
-    
+
     def unload(self, cargo: str):
         self.cargo.remove(cargo)
-    
+
     def getActions(self) -> List[str]:
         ret = []
         if self.location == "SEA":
@@ -76,20 +62,19 @@ class ShipGen:
 
 class CompanyGen:
     def __init__(self):
-        # self.ships: Dict[str, List[Ship]] = {}
         self.ships = {}
-    
+
     def establish(self, name):
         self.ships[name] = list()
-    
+
     def acquire(self, ship, company):
         self.ships[company].append(ship)
         ship.owner = company
-        
+
     def unacquire(self, ship, company):
         self.ships[company].remove(ship)
         ship.owner = ""
-    
+
     def transfer(self, ship, oldCompany, newCompany):
         self.ships[oldCompany].remove(ship)
         self.ships[newCompany].append(ship)

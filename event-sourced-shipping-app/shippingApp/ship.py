@@ -5,23 +5,18 @@ import ray
 
 from util import Actor, Event
 
-# class ref_src:
-#     def __init__(self, parent_ref):
-#         self.parent_ref: ray.actor.ActorHandle = parent_ref
-#         self.parent_name = ray.get(parent_ref.get_name.remote())
 
 @ray.remote
 class Ship(Actor):
     def __init__(self, name: str, location: str, replay: bool = False):
         self.name: str
         self.location: str
-        # self.owner: ShipCompany
         self.owner: str
         self.cargo: List[str]
         self.log: List[Event] = list()
         if not replay:
             self.on(Ship.Creation(name, location))
-    
+
     def eventHandler(self, event: Event):
         if not isinstance(event, Event):
             return
@@ -61,22 +56,21 @@ class Ship(Actor):
         if self.location == "SEA":
             raise Ship.InvalidActionException
         self.on(Ship.Load(self.name, cargo))
-    
+
     def unload(self, cargo: str):
         if self.location == "SEA" or cargo not in self.cargo:
             raise Ship.InvalidActionException
         self.on(Ship.Unload(self.name, cargo))
-    
+
     def getName(self):
         return self.name
-        # replay(getName()).location
 
     def getLocation(self):
         return self.location
-    
+
     def getOwner(self):
         return self.owner
-    
+
     def getCargo(self):
         return self.cargo
 
@@ -97,9 +91,8 @@ class Ship(Actor):
             super().__init__()
             self.ship = ship
             self.port = port
-    
+
     class TransferOwnership(Event):
-        # def __init__(self, owner: ShipCompany):
         def __init__(self, owner: str):
             super().__init__()
             self.owner = owner
@@ -127,4 +120,3 @@ class Ship(Actor):
             super().__init__()
             self.ship = ship
             self.cargo = cargo
-

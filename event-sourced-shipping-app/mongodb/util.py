@@ -21,7 +21,6 @@ def sortStreams(streams: List[List[Any]], key=lambda x: x.happened) -> List[Any]
     for stream in streams:
         for log in stream:
             flattened.append(log) # stackoverflow.com/questions/8875706/
-    # flattened = [(key(log), log) for stream in streams for log in stream]
     return sorted(flattened, key=key)
 
 def handleEQ(handle1, handle2):

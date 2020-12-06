@@ -9,20 +9,14 @@ from util import Actor, Event
 
 SNAPSHOTS_DIR = 'data/snapshots'
 
-# class ref_src:
-#     def __init__(self, parent_ref):
-#         self.parent_ref: ray.actor.ActorHandle = parent_ref
-#         self.parent_name = ray.get(parent_ref.get_name.remote())
 
 @ray.remote
 class Ship(Actor):
     def __init__(self, name: str, location: str, db="mongodb://localhost:27017/", replay: bool=False):
         self.name: str
         self.location: str
-        # self.owner: ShipCompany
         self.owner: str
         self.cargo: List[str]
-        # self.log: List[Event] = list()
         self.offset = 0
         self.client = pymongo.MongoClient(db)
         self.db = self.client.shipping_app
@@ -88,7 +82,6 @@ class Ship(Actor):
             "type": event.__class__.__qualname__,
             **event.to_dict()
         })
-        # self.log.append(event)
         self.offset += 1
         self.eventHandler(event)
 
@@ -126,7 +119,6 @@ class Ship(Actor):
 
     def getLog(self):
         return [entry for entry in self.collection.find({"ship": self.name})]
-        # return self.log
 
     class InvalidActionException(Exception):...
 
@@ -137,7 +129,6 @@ class Ship(Actor):
             self.port = port
 
     class TransferOwnership(Event):
-        # def __init__(self, owner: ShipCompany):
         def __init__(self, ship: str, owner: str, happened: str=None):
             super().__init__(happened)
             self.ship = ship

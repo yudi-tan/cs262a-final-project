@@ -27,22 +27,8 @@ outputFile = f"test e{numEvents} s{numShips} c{numCompanies} i{snapshot_interval
 random.seed(0)
 
 allPortNames = ["Port" + str(i) for i in range(numPorts)]
-# allPortNames = []
-# while len(allPortNames) < numPorts:
-#     name = "".join([random.choice(string.ascii_uppercase) for _ in range(portNameLen)])
-#     allPortNames.append(name) if name not in allPortNames else None
-
 allShipNames = ["Ship" + str(i) for i in range(numShips)]
-# allShipNames = []
-# while len(allShipNames) < numShips:
-#     name = "".join([random.choice(string.ascii_letters) for _ in range(shipNameLen)])
-#     allShipNames.append(name) if name not in allShipNames else None
-
 allCompanyNames = ["Company" + str(i) for i in range(numCompanies)]
-# allCompanyNames = []
-# while len(allCompanyNames) < numCompanies:
-#     name = "".join([random.choice(string.ascii_letters) for _ in range(companyNameLen)])
-#     allCompanyNames.append(name) if name not in allCompanyNames else None
 
 
 class ShipGen:
@@ -81,7 +67,6 @@ class ShipGen:
 
 class CompanyGen:
     def __init__(self):
-        # self.ships: Dict[str, List[Ship]] = {}
         self.ships = {}
 
     def establish(self, name):
