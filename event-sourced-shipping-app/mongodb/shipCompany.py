@@ -54,13 +54,13 @@ class ShipCompany(Actor): # global single-instance implementation
         if ray.get(ship.getOwner.remote()) != "":
             raise ShipCompany.InvalidActionException
         self.on(ShipCompany.Acquire(ship, company))
-        ship.on.remote(Ship.TransferOwnership(ray.get(ship.getName.remote()), company))
+        return ship.on.remote(Ship.TransferOwnership(ray.get(ship.getName.remote()), company))
 
     def unacquire(self, ship: Ship, company: str):
         if ray.get(ship.getOwner.remote()) != company:
             raise ShipCompany.InvalidActionException
         self.on(ShipCompany.Unacquire(ship, company))
-        ship.on.remote(Ship.TransferOwnership(ray.get(ship.getName.remote()), ""))
+        return ship.on.remote(Ship.TransferOwnership(ray.get(ship.getName.remote()), ""))
 
     def transfer(self, ship: Ship, oldCompany: str, newCompany: str):
         if ray.get(ship.getOwner.remote()) != oldCompany:
@@ -72,7 +72,7 @@ class ShipCompany(Actor): # global single-instance implementation
         if newCompany not in self.ships.keys():
             self.on(ShipCompany.Establish(newCompany))
         self.on(ShipCompany.Transfer(ship, oldCompany, newCompany))
-        ship.on.remote(Ship.TransferOwnership(ray.get(ship.getName.remote()), newCompany))
+        return ship.on.remote(Ship.TransferOwnership(ray.get(ship.getName.remote()), newCompany))
 
     def getState(self):
         return self.ships

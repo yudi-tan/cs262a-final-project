@@ -21,6 +21,9 @@ snapshot_interval = 100
 eventProbabilityOfCompany = 0.05
 # number of events for companies = numEvents*eventProbabilityOfCompany
 
+# Owner validation requires waiting for ship company operations to complete before validating the ships, which could be bad for performance.
+validateOwner = True
+
 outputFile = f"test e{numEvents} s{numShips} c{numCompanies} i{snapshot_interval}.py"
 
 ########
@@ -51,7 +54,10 @@ class ShipGen:
         self.cargo.remove(cargo)
 
     def getActions(self) -> List[str]:
-        ret = ["getLocation", "getOwner"]
+        ret = ["getLocation"]
+
+        if validateOwner:
+            ret += ["getOwner"]
 
         if self.cargo:
             ret += ["getCargo"]
@@ -145,7 +151,8 @@ while count < numEvents:
             Qs += 1
         elif action == "getOwner":
             # The get call ensures any potential transfer operations are completed first, as ships and the ship company run in parallel.
-            output += f"ray.get(sc_obj_ref)\n"
+            # Any ship company operations that affect ships return the ObjectID of the ship's operation, hence the double get.
+            output += f"ray.get(ray.get(sc_obj_ref))\n"
             output += f"assert \"{ship.owner}\" == ray.get({name}.getOwner.remote())\n"
             Qs += 1
         elif action == "getCargo":
