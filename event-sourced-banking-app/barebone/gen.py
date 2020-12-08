@@ -1,28 +1,35 @@
 import json, random, datetime
 
 num_users = 20
-num_events = 10000
-snapshot_interval = 100
+num_events = 100
+snapshot_interval = 10
 outputFile = f"test{num_events}_{snapshot_interval}.py"
 
+# random.seed(datetime.datetime.now())
 random.seed(0)
 
 def printCmd(user: str, amount: int, command: str, actor: str):
     assert command == "DEPOSIT" or command == "WITHDRAW"
     ret  = f"payload_dict = {{ 'user': '{user}', 'amount': {amount} }}\n"
     ret += "payload = json.dumps(payload_dict)\n"
-    ret += f"command = Command('{command}', payload)\n"
+    ret += f"command = Command('{user}', '{command}', payload)\n"
     ret += f"{actor}.process_command(command)\n"
     return ret
 
 output = """import json
 import os
+import shutil
 from command import Command
-from bankingactor import *
+from bankingactor import BankingActor
+
+if os.path.exists('data/banking.db'):
+    os.remove('data/banking.db')
+if os.path.exists('data/snapshots'):
+    shutil.rmtree('data/snapshots/')
+
 """
-output += "open('data/log/logfile.txt', 'w').close()\n"
 actor = "bank"
-output += f"{actor} = BankingActor()\n\n"
+output += f"{actor} = BankingActor('./BankEventsSchema.txt')\n\n"
 
 bank = {}
 for i in range(num_users):
@@ -51,7 +58,7 @@ while count < num_events:
 
     if count == validate_offset:
         # Validate that replay by snapshots is valid
-        output += f"replayed = BankingActor()\n"
+        output += f"replayed = BankingActor('./BankEventsSchema.txt')\n"
         output += f"assert {actor}.retrieve_ledger() == replayed.retrieve_ledger()\n"
 
     count += 1
@@ -59,10 +66,9 @@ while count < num_events:
 output += "\n"
 
 for user in allUsers:
-    output += f"user_amount = {actor}.retrieve_balance('{user}')\n"
+    output += f"ref = {actor}.retrieve_balance('{user}')\n"
+    output += f"user_amount = ref\n"
     output += f"assert user_amount == {bank[user]}\n"
-
-output += "\n"
 
 with open(outputFile, "w") as f:
     f.write(output)
