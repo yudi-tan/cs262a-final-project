@@ -21,10 +21,10 @@ snapshot_interval = 100
 eventProbabilityOfCompany = 0.05
 # number of events for companies = numEvents*eventProbabilityOfCompany
 
-# Owner validation requires waiting for ship company operations to complete before validating the ships, which could be bad for performance.
-validateOwner = True
+# Whether or not to test with the shipping company or just individual ships
+testShippingCompany = True
 
-outputFile = f"test e{numEvents} s{numShips} c{numCompanies} i{snapshot_interval}.py"
+outputFile = f"test e{numEvents} s{numShips} c{numCompanies} i{snapshot_interval} testShippingCompany={testShippingCompany}.py"
 
 ########
 random.seed(0)
@@ -54,10 +54,7 @@ class ShipGen:
         self.cargo.remove(cargo)
 
     def getActions(self) -> List[str]:
-        ret = ["getLocation"]
-
-        if validateOwner:
-            ret += ["getOwner"]
+        ret = ["getLocation", "getOwner"]
 
         if self.cargo:
             ret += ["getCargo"]
@@ -108,14 +105,19 @@ db.drop_collection("ship_logs")
 db.drop_collection("company_logs")
 
 sc: ShipCompany = ShipCompany.remote()
-sc_obj_ref: ray._raylet.ObjectID
 """
 output += f"\n# numEvents = {numEvents}, numShips = {numShips}, numCompanies = {numCompanies}\n"
 insertion_ind = len(output)
 sc = CompanyGen()
 for name in allCompanyNames:
     sc.establish(name)
-    output += f"sc.establish.remote('{name}')\n"
+    if testShippingCompany:
+        output += f"sc.establish.remote('{name}')\n"
+
+if testShippingCompany:
+    output += "sc_obj_ref: ray._raylet.ObjectID\n"
+else:
+    output += "allShips = []\n"
 
 allShips = []
 for name in allShipNames:
@@ -125,7 +127,11 @@ for name in allShipNames:
     output += f"{name}: Ship = Ship.remote('{name}', '{startingPort}')\n"
     company = random.choice(allCompanyNames)
     sc.acquire(ship, company)
-    output += f"sc_obj_ref = sc.acquire.remote({name}, '{company}')\n"
+    if testShippingCompany:
+        output += f"sc_obj_ref = sc.acquire.remote({name}, '{company}')\n"
+    else:
+        output += f"allShips.append({name})\n"
+        output += f"{ship.name}.on.remote(Ship.TransferOwnership('{ship.name}', '{company}'))\n"
 
 output += "\n"
 
@@ -139,8 +145,11 @@ while count < numEvents:
         if len(sc.ships[old]) == 0:
             continue
         ship = random.choice(sc.ships[old])
-        output += f"sc_obj_ref = sc.transfer.remote({ship.name}, '{old}', '{new}')\n"
         sc.transfer(ship, old, new)
+        if testShippingCompany:
+            output += f"sc_obj_ref = sc.transfer.remote({ship.name}, '{old}', '{new}')\n"
+        else:
+            output += f"{ship.name}.on.remote(Ship.TransferOwnership('{ship.name}', '{new}'))\n"
     else:
         # Ship event
         ship = random.choice(allShips)
@@ -152,7 +161,8 @@ while count < numEvents:
         elif action == "getOwner":
             # The get call ensures any potential transfer operations are completed first, as ships and the ship company run in parallel.
             # Any ship company operations that affect ships return the ObjectID of the ship's operation, hence the double get.
-            output += f"ray.get(ray.get(sc_obj_ref))\n"
+            if testShippingCompany:
+                output += f"ray.get(ray.get(sc_obj_ref))\n"
             output += f"assert \"{ship.owner}\" == ray.get({name}.getOwner.remote())\n"
             Qs += 1
         elif action == "getCargo":
@@ -180,9 +190,13 @@ while count < numEvents:
             ship.unload(cargo)
             Cs += 1
     if count % snapshot_interval == 0:
-        output += "for company in ray.get(sc.getState.remote()).values():\n"
-        output += "\tfor ship in company:\n"
-        output += "\t\tship.snapshot.remote()\n"
+        if testShippingCompany:
+            output += "for company in ray.get(sc.getState.remote()).values():\n"
+            output += "\tfor ship in company:\n"
+            output += "\t\tship.snapshot.remote()\n"
+        else:
+            output += "for ship in allShips:\n"
+            output += "\tship.snapshot.remote()\n"
     count += 1
 output = output[:insertion_ind] + f"# num_queries = {Qs}, num_commands = {Cs}\n\n" + output[insertion_ind:]
 output += "\n"
@@ -194,7 +208,8 @@ for name in allShipNames:
     output += f"assert ray.get(replayed.getOwner.remote()) == ray.get({name}.getOwner.remote())\n"
     output += f"assert ray.get(replayed.getCargo.remote()) == ray.get({name}.getCargo.remote())\n"
 
-output += "\nlog = ray.get(sc.getGlobalLogStream.remote())\n"
+if testShippingCompany:
+    output += "\nlog = ray.get(sc.getGlobalLogStream.remote())\n"
 
 with open(outputFile, "w") as f:
     f.write(output)
