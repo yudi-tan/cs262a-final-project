@@ -8,21 +8,21 @@ from util import *
 numPorts = 10
 portNameLen = 3
 
-numShips = 20
+numShips = 4
 shipNameLen = 3
 
-numCompanies = 3
+numCompanies = 0
 companyNameLen = 5
 
 cargoNameLen = 10
 
-numEvents = 1000
-snapshot_interval = 100
-eventProbabilityOfCompany = 0.05
+numEvents = 20000
+snapshot_interval = 300
+eventProbabilityOfCompany = 0
 # number of events for companies = numEvents*eventProbabilityOfCompany
 
 # Whether or not to test with the shipping company or just individual ships
-testShippingCompany = True
+testShippingCompany = False
 
 outputFile = f"test e{numEvents} s{numShips} c{numCompanies} i{snapshot_interval} testShippingCompany={testShippingCompany}.py"
 
@@ -89,7 +89,7 @@ class CompanyGen:
         ship.owner = newCompany
 
 
-output = """import pymongo, ray, shutil
+output = """import pymongo, ray, shutil, time
 
 from ship import *
 from shipCompany import *
@@ -98,12 +98,11 @@ if os.path.exists('data/snapshots'):
     shutil.rmtree('data/snapshots/')
 
 ray.init()
-
 client = pymongo.MongoClient()
 db = client.shipping_app
 db.drop_collection("ship_logs")
 db.drop_collection("company_logs")
-
+t0 = time.time()
 sc: ShipCompany = ShipCompany.remote()
 """
 output += f"\n# numEvents = {numEvents}, numShips = {numShips}, numCompanies = {numCompanies}\n"
@@ -125,13 +124,13 @@ for name in allShipNames:
     ship = ShipGen(name, startingPort)
     allShips.append(ship)
     output += f"{name}: Ship = Ship.remote('{name}', '{startingPort}')\n"
-    company = random.choice(allCompanyNames)
-    sc.acquire(ship, company)
     if testShippingCompany:
+        company = random.choice(allCompanyNames)
+        sc.acquire(ship, company)
         output += f"sc_obj_ref = sc.acquire.remote({name}, '{company}')\n"
     else:
         output += f"allShips.append({name})\n"
-        output += f"{ship.name}.on.remote(Ship.TransferOwnership('{ship.name}', '{company}'))\n"
+        output += f"{ship.name}.on.remote(Ship.TransferOwnership('{ship.name}', ''))\n"
 
 output += "\n"
 
@@ -211,5 +210,7 @@ for name in allShipNames:
 if testShippingCompany:
     output += "\nlog = ray.get(sc.getGlobalLogStream.remote())\n"
 
+output += "t1 = time.time()\n"
+output += "print(t1 - t0)\n"
 with open(outputFile, "w") as f:
     f.write(output)

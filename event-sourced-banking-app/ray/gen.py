@@ -1,8 +1,8 @@
 import json, random, datetime
 
 num_users = 20
-num_events = 1000
-snapshot_interval = 1500
+num_events = 100000
+snapshot_interval = 100
 outputFile = f"test{num_events}_{snapshot_interval}.py"
 
 # random.seed(datetime.datetime.now())
